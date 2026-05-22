@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# ML Models (file size too large for git)
+backend/ml/models/*.pt
+
 # C extensions
 *.so
 
