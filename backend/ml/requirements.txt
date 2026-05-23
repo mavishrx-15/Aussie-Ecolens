@@ -1,0 +1,11 @@
+torch
+torchvision
+numpy
+pillow
+matplotlib
+pyyaml
+tqdm
+megadetector
+onnx
+onnx2torch
+ultralytics
