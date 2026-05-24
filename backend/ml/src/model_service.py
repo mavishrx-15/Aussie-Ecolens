@@ -2,10 +2,13 @@ import os
 from pathlib import Path
 from collections import Counter
 
+import boto3
 import torch
 import numpy as np
+
 from PIL import Image
 import torchvision.transforms as transforms
+
 from megadetector.detection import run_detector_batch
 
 from dotenv import load_dotenv
@@ -26,17 +29,22 @@ class WildlifeModelService:
 
         self.label_metadata = self._load_label_metadata()
 
-        self.md_model_path = self._resolve_model_path(
-            env_key="MD_MODEL_PATH",
-            default_relative_path="models/mdv5a.pt"
+        self.model_bucket = os.environ.get("MODEL_BUCKET")
+
+        self.md_model_path = self._prepare_model(
+            env_key="MD_MODEL_KEY",
+            default_relative_path="models/mdv5a.pt",
+            local_filename="mdv5a.pt"
         )
 
-        self.species_model_path = self._resolve_model_path(
-            env_key="SPECIES_MODEL_PATH",
-            default_relative_path="models/model.pt"
+        self.species_model_path = self._prepare_model(
+            env_key="SPECIES_MODEL_KEY",
+            default_relative_path="models/model.pt",
+            local_filename="model.pt"
         )
 
         self.device = self._get_device()
+
         self.species_model = self._load_species_model()
 
         self.transform = transforms.Compose([
@@ -53,6 +61,45 @@ class WildlifeModelService:
 
         return str(path.resolve())
 
+    def _prepare_model(self, env_key, default_relative_path, local_filename):
+        s3_key = os.environ.get(env_key)
+
+        if self.model_bucket and s3_key:
+            try:
+                return self._download_model_from_s3(
+                    key=s3_key,
+                    local_filename=local_filename
+                )
+
+            except Exception as e:
+                print(f"Failed to download model from S3: {e}")
+                print("Falling back to local model")
+
+        return self._resolve_model_path(
+            env_key=env_key.replace("_KEY", "_PATH"),
+            default_relative_path=default_relative_path
+        )
+
+    def _download_model_from_s3(self, key, local_filename):
+        local_path = Path("/tmp") / local_filename
+
+        if local_path.exists():
+            print(f"Using cached model: {local_path}")
+            return str(local_path)
+
+        print(f"Downloading model from s3://{self.model_bucket}/{key}")
+
+        s3 = boto3.client("s3")
+
+        s3.download_file(
+            self.model_bucket,
+            key,
+            str(local_path)
+        )
+
+        return str(local_path)
+
+
     def _get_device(self):
         if torch.cuda.is_available():
             return "cuda"
@@ -61,6 +108,7 @@ class WildlifeModelService:
             return "mps"
 
         return "cpu"
+
 
     def _load_species_model(self):
         if not Path(self.species_model_path).exists():
@@ -78,6 +126,7 @@ class WildlifeModelService:
         model.to(self.device)
 
         return model
+
 
     def _load_label_metadata(self):
         labels_path_value = os.environ.get(
@@ -121,22 +170,6 @@ class WildlifeModelService:
         return mapping
 
 
-    def _format_tag(self, scientific_name, count):
-        metadata = self.label_metadata.get(
-            scientific_name,
-            {
-                "common_name": scientific_name.lower(),
-                "scientific_name": scientific_name
-            }
-        )
-
-        return {
-            "common_name": metadata["common_name"],
-            "scientific_name": metadata["scientific_name"],
-            "count": count,
-            "source": "ml"
-        }
-
     def detect_animals(self, image_paths):
         if not Path(self.md_model_path).exists():
             raise FileNotFoundError(
@@ -151,8 +184,10 @@ class WildlifeModelService:
             quiet=True
         )
 
+
     def crop_detection(self, image_path, bbox, crop_size=600):
         img = Image.open(image_path).convert("RGB")
+
         width, height = img.size
 
         x, y, w, h = bbox
@@ -163,19 +198,30 @@ class WildlifeModelService:
         bottom = int((y + h) * height)
 
         crop = img.crop((left, top, right, bottom))
-        crop = crop.resize((crop_size, crop_size), Image.BILINEAR)
+
+        crop = crop.resize(
+            (crop_size, crop_size),
+            Image.BILINEAR
+        )
 
         return crop
+
 
     @torch.no_grad()
     def classify_crop(self, crop):
         img = self.transform(crop)
+
         img = img.unsqueeze(0)
         img = img.permute(0, 2, 3, 1)
+
         img = img.to(self.device)
 
         logits = self.species_model(img)
-        probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
+
+        probs = torch.softmax(
+            logits,
+            dim=1
+        )[0].cpu().numpy()
 
         best_idx = int(np.argmax(probs))
 
@@ -184,18 +230,28 @@ class WildlifeModelService:
             "confidence": float(probs[best_idx])
         }
 
-    def process_image(self, image_path, confidence_threshold=0.7):
+
+    def process_image(
+        self,
+        image_path,
+        confidence_threshold=0.7
+    ):
         image_path = Path(image_path).resolve()
 
         if not image_path.exists():
-            raise FileNotFoundError(f"Image not found at: {image_path}")
+            raise FileNotFoundError(
+                f"Image not found at: {image_path}"
+            )
 
-        detections_data = self.detect_animals([str(image_path)])
+        detections_data = self.detect_animals(
+            [str(image_path)]
+        )
 
         results = []
 
         for entry in detections_data:
             for detection in entry.get("detections", []):
+
                 if detection["category"] != "1":
                     continue
 
@@ -227,7 +283,9 @@ class WildlifeModelService:
                     "species_confidence": prediction["confidence"]
                 })
 
-        tag_counts = Counter([r["common_name"] for r in results])
+        tag_counts = Counter(
+            [r["common_name"] for r in results]
+        )
 
         tags = [
             {

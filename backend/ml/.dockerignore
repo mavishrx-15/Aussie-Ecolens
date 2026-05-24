@@ -1,0 +1,8 @@
+src/test/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+models/
