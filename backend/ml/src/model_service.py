@@ -24,6 +24,8 @@ class WildlifeModelService:
 
         load_dotenv(self.base_dir / ".env")
 
+        self.label_metadata = self._load_label_metadata()
+
         self.md_model_path = self._resolve_model_path(
             env_key="MD_MODEL_PATH",
             default_relative_path="models/mdv5a.pt"
@@ -77,6 +79,64 @@ class WildlifeModelService:
 
         return model
 
+    def _load_label_metadata(self):
+        labels_path_value = os.environ.get(
+            "LABELS_PATH",
+            "labels.txt"
+        )
+
+        labels_path = Path(labels_path_value)
+
+        if not labels_path.is_absolute():
+            labels_path = self.base_dir / labels_path
+
+        labels_path = labels_path.resolve()
+
+        print(f"Loading labels from: {labels_path}")
+
+        if not labels_path.exists():
+            print("labels.txt not found")
+            return {}
+
+        mapping = {}
+
+        with open(labels_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = [p.strip() for p in line.strip().split(";")]
+
+                if len(parts) < 7:
+                    continue
+
+                _, _, _, _, genus, species, common_name = parts
+
+                scientific_name = f"{genus}_{species}".lower()
+
+                mapping[scientific_name] = {
+                    "common_name": common_name.lower(),
+                    "scientific_name": scientific_name
+                }
+
+        print(f"Loaded {len(mapping)} label mappings")
+
+        return mapping
+
+
+    def _format_tag(self, scientific_name, count):
+        metadata = self.label_metadata.get(
+            scientific_name,
+            {
+                "common_name": scientific_name.lower(),
+                "scientific_name": scientific_name
+            }
+        )
+
+        return {
+            "common_name": metadata["common_name"],
+            "scientific_name": metadata["scientific_name"],
+            "count": count,
+            "source": "ml"
+        }
+
     def detect_animals(self, image_paths):
         if not Path(self.md_model_path).exists():
             raise FileNotFoundError(
@@ -120,7 +180,7 @@ class WildlifeModelService:
         best_idx = int(np.argmax(probs))
 
         return {
-            "species": CLASSES[best_idx],
+            "species": CLASSES[best_idx].lower(),
             "confidence": float(probs[best_idx])
         }
 
@@ -149,17 +209,43 @@ class WildlifeModelService:
 
                 prediction = self.classify_crop(crop)
 
+                scientific_name = prediction["species"]
+
+                metadata = self.label_metadata.get(
+                    scientific_name,
+                    {
+                        "common_name": scientific_name.lower(),
+                        "scientific_name": scientific_name
+                    }
+                )
+
                 results.append({
                     "bbox": detection["bbox"],
                     "detection_confidence": detection["conf"],
-                    "species": prediction["species"],
+                    "common_name": metadata["common_name"],
+                    "scientific_name": metadata["scientific_name"],
                     "species_confidence": prediction["confidence"]
                 })
 
-        tag_counts = Counter([r["species"] for r in results])
+        tag_counts = Counter([r["common_name"] for r in results])
+
+        tags = [
+            {
+                "common_name": common_name,
+                "scientific_name": next(
+                    r["scientific_name"]
+                    for r in results
+                    if r["common_name"] == common_name
+                ),
+                "count": count,
+                "source": "ml"
+            }
+            for common_name, count in tag_counts.items()
+        ]
 
         return {
             "file": image_path.name,
             "detections": results,
-            "tags": dict(tag_counts)
+            "tags": tags,
+            "tag_names": list(tag_counts.keys())
         }
