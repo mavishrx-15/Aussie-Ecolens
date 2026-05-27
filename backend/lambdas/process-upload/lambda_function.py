@@ -5,11 +5,15 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
+import json
 
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
+lambda_client = boto3.client("lambda")
 
 table = dynamodb.Table("media_files")
+
+ML_LAMBDA_NAME = "wildlife-ml-inference"
 
 
 def is_supported_image(key):
@@ -52,6 +56,7 @@ def handle_deduplication(bucket, key, checksum):
     )
 
     print("Duplicate upload deleted from S3")
+
     return True
 
 
@@ -60,7 +65,13 @@ def create_thumbnail(file_bytes, max_size=(300, 300)):
     image.thumbnail(max_size)
 
     output = BytesIO()
-    image.convert("RGB").save(output, format="JPEG", quality=80)
+
+    image.convert("RGB").save(
+        output,
+        format="JPEG",
+        quality=80
+    )
+
     output.seek(0)
 
     return output
@@ -88,10 +99,18 @@ def upload_thumbnail(bucket, file_key, file_bytes):
     return thumbnail_key
 
 
-def run_ml_tagging(file_bytes, file_key):
-    return {
-        "alectura_lathami": 1
-    }
+def start_ml_processing(bucket, key, file_id):
+    lambda_client.invoke(
+        FunctionName=ML_LAMBDA_NAME,
+        InvocationType="Event",
+        Payload=json.dumps({
+            "bucket": bucket,
+            "key": key,
+            "file_id": file_id
+        })
+    )
+
+    print("ML Lambda invoked asynchronously")
 
 
 def save_metadata(
@@ -99,8 +118,7 @@ def save_metadata(
     file_id,
     original_key,
     thumbnail_key,
-    file_type,
-    tags
+    file_type
 ):
     table.put_item(
         Item={
@@ -109,16 +127,19 @@ def save_metadata(
             "original_key": original_key,
             "thumbnail_key": thumbnail_key,
             "file_type": file_type,
-            "tags": tags,
-            "tag_names": list(tags.keys()),
-            "uploaded_at": datetime.utcnow().isoformat(),
+            "tags": [],
+            "tag_names": [],
+            "detections": [],
+            "uploaded_at": (
+                datetime.utcnow().isoformat() + "Z"
+            ),
             "uploaded_by": "placeholder-user",
             "uploaded_email": "placeholder@email.com",
-            "status": "completed"
+            "status": "pending"
         }
     )
 
-    print("Metadata saved to DynamoDB")
+    print("Pending metadata saved to DynamoDB")
 
 
 def process_image_upload(bucket, key, size):
@@ -135,6 +156,7 @@ def process_image_upload(bucket, key, size):
         )
 
         print("Empty upload deleted from S3")
+
         return
 
     if not is_supported_image(key):
@@ -146,21 +168,29 @@ def process_image_upload(bucket, key, size):
         )
 
         print("Unsupported upload deleted from S3")
+
         return
 
     file_bytes = get_s3_file_bytes(bucket, key)
 
     checksum = calculate_sha256(file_bytes)
+
     print(f"SHA256: {checksum}")
 
-    is_duplicate = handle_deduplication(bucket, key, checksum)
+    is_duplicate = handle_deduplication(
+        bucket,
+        key,
+        checksum
+    )
 
     if is_duplicate:
         return
 
-    thumbnail_key = upload_thumbnail(bucket, key, file_bytes)
-
-    tags = run_ml_tagging(file_bytes, key)
+    thumbnail_key = upload_thumbnail(
+        bucket,
+        key,
+        file_bytes
+    )
 
     file_id = str(uuid.uuid4())
 
@@ -169,17 +199,32 @@ def process_image_upload(bucket, key, size):
         file_id=file_id,
         original_key=key,
         thumbnail_key=thumbnail_key,
-        file_type="image",
-        tags=tags
+        file_type="image"
+    )
+
+    start_ml_processing(
+        bucket=bucket,
+        key=key,
+        file_id=file_id
     )
 
 
 def lambda_handler(event, context):
     for record in event["Records"]:
         bucket = record["s3"]["bucket"]["name"]
-        key = urllib.parse.unquote_plus(record["s3"]["object"]["key"])
+
+        key = urllib.parse.unquote_plus(
+            record["s3"]["object"]["key"]
+        )
+
         size = record["s3"]["object"]["size"]
 
-        process_image_upload(bucket, key, size)
+        process_image_upload(
+            bucket,
+            key,
+            size
+        )
 
-    return {"statusCode": 200}
+    return {
+        "statusCode": 200
+    }

@@ -1,0 +1,31 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+RUN yum update -y && \
+    yum install -y \
+    gcc \
+    gcc-c++ \
+    make \
+    cmake \
+    rust \
+    cargo \
+    libX11 \
+    libXext \
+    libXrender \
+    libxcb \
+    mesa-libGL \
+    glib2
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir --force-reinstall \
+    torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+
+COPY labels.txt .
+COPY src/ .
+
+CMD ["lambda_function.lambda_handler"]
