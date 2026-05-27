@@ -1,0 +1,1 @@
+export const API_BASE_URL = 'https://h357fuzdq6.execute-api.ap-southeast-2.amazonaws.com/prod'
