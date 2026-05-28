@@ -87,3 +87,13 @@ Protected routes:
 The API Gateway authentication layer has been configured.  
 The next step is to connect the routes to Lambda integrations so the API can invoke backend functions.
 * Email verification workflow
+
+## Progress Update
+
+Completed:
+- AWS Cognito setup
+- JWT authorization for API Gateway
+- API routes configuration
+- Lambda integration
+- S3 upload bucket creation
+- Serverless upload workflow
