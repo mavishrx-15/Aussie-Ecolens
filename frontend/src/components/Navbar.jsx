@@ -12,6 +12,7 @@ export default function Navbar() {
     { key: '/upload', label: 'Upload' },
     { key: '/query', label: 'Search' },
     { key: '/manage', label: 'Manage' },
+    { key: '/notifications', label: 'Notifications' }
   ]
 
   return (
