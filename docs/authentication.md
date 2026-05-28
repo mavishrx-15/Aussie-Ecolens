@@ -57,4 +57,33 @@ Configured and tested:
 * Cognito User Pool
 * Hosted UI
 * OAuth login flow
+
+## API Gateway Authorization Setup
+
+An HTTP API was created in AWS API Gateway.
+
+### API Configuration
+- API name: AussieEcoLens-API
+- Region: ap-southeast-2
+- Stage: $default
+- Auto-deploy: Enabled
+
+### Routes Created
+- POST /upload
+- POST /query
+- POST /tags
+- DELETE /file
+
+### JWT Authorizer
+A JWT authorizer named `CognitoAuthorizer` was created and connected to the Cognito User Pool.
+
+Protected routes:
+- POST /upload
+- POST /query
+- POST /tags
+- DELETE /file
+
+### Current Status
+The API Gateway authentication layer has been configured.  
+The next step is to connect the routes to Lambda integrations so the API can invoke backend functions.
 * Email verification workflow
