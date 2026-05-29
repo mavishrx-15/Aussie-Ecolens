@@ -1,15 +1,44 @@
-import { Form, Input, Button, Typography } from 'antd'
+import { useState } from 'react'
+import { Form, Input, Button, Typography, message, Modal } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
+import { signIn, confirmSignUp } from '../auth'
 import logo from '../assets/icon.png'
 
 const { Title, Text } = Typography
 
 export default function Login() {
   const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+  const [confirmModal, setConfirmModal] = useState(false)
+  const [confirmEmail, setConfirmEmail] = useState('')
+  const [confirmCode, setConfirmCode] = useState('')
 
-  const handleLogin = (values) => {
-    // TODO: connect Cognito
-    navigate('/upload')
+  const handleLogin = async (values) => {
+    setLoading(true)
+    try {
+      await signIn(values.email, values.password)
+      message.success('Logged in successfully!')
+      navigate('/upload')
+    } catch (err) {
+      if (err.code === 'UserNotConfirmedException') {
+        setConfirmEmail(values.email)
+        setConfirmModal(true)
+      } else {
+        message.error(err.message || 'Login failed')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirm = async () => {
+    try {
+      await confirmSignUp(confirmEmail, confirmCode)
+      message.success('Email confirmed! Please log in.')
+      setConfirmModal(false)
+    } catch (err) {
+      message.error(err.message || 'Confirmation failed')
+    }
   }
 
   return (
@@ -28,7 +57,7 @@ export default function Login() {
         boxShadow: '0 4px 24px rgba(0,0,0,0.08)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img src={logo} alt="Aussie EcoLens" style={{ height: 75, marginBottom: 8 }} />
+          <img src={logo} alt="Aussie EcoLens" style={{ height: 100, marginBottom: 8 }} />
           <Title level={3} style={{ color: '#2e7d32', margin: '8px 0 4px' }}>
             Aussie EcoLens
           </Title>
@@ -58,6 +87,7 @@ export default function Login() {
               htmlType="submit"
               size="large"
               block
+              loading={loading}
               style={{ background: '#2e7d32', borderColor: '#2e7d32' }}
             >
               Sign in
@@ -72,6 +102,25 @@ export default function Login() {
           </Link>
         </div>
       </div>
+
+      {/* Email confirmation modal */}
+      <Modal
+        title="Confirm your email"
+        open={confirmModal}
+        onOk={handleConfirm}
+        onCancel={() => setConfirmModal(false)}
+        okText="Confirm"
+        okButtonProps={{ style: { background: '#2e7d32', borderColor: '#2e7d32' } }}
+      >
+        <Text type="secondary">Enter the confirmation code sent to your email:</Text>
+        <Input
+          placeholder="Confirmation code"
+          value={confirmCode}
+          onChange={(e) => setConfirmCode(e.target.value)}
+          size="large"
+          style={{ marginTop: 12 }}
+        />
+      </Modal>
     </div>
   )
 }
