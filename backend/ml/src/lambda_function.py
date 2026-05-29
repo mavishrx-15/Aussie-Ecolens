@@ -4,14 +4,16 @@ import boto3
 import tempfile
 
 from decimal import Decimal
-
 from model_service import WildlifeModelService
 
 s3 = boto3.client("s3")
-
 dynamodb = boto3.resource("dynamodb")
+lambda_client = boto3.client("lambda")
 
 table = dynamodb.Table("media_files")
+frame_results_table = dynamodb.Table("frame_results")
+
+AGGREGATOR_LAMBDA_NAME = "video-result-aggregator"
 
 model_service = None
 
@@ -21,9 +23,7 @@ def get_model_service():
 
     if model_service is None:
         print("Cold start: loading model service")
-
         model_service = WildlifeModelService()
-
     else:
         print("Warm start: reusing loaded model service")
 
@@ -35,16 +35,10 @@ def convert_floats(obj):
         return Decimal(str(obj))
 
     if isinstance(obj, list):
-        return [
-            convert_floats(item)
-            for item in obj
-        ]
+        return [convert_floats(item) for item in obj]
 
     if isinstance(obj, dict):
-        return {
-            key: convert_floats(value)
-            for key, value in obj.items()
-        }
+        return {key: convert_floats(value) for key, value in obj.items()}
 
     return obj
 
@@ -54,168 +48,127 @@ def convert_decimals(obj):
         return float(obj)
 
     if isinstance(obj, list):
-        return [
-            convert_decimals(item)
-            for item in obj
-        ]
+        return [convert_decimals(item) for item in obj]
 
     if isinstance(obj, dict):
-        return {
-            key: convert_decimals(value)
-            for key, value in obj.items()
-        }
+        return {key: convert_decimals(value) for key, value in obj.items()}
 
     return obj
 
 
-def update_metadata(
-    file_id,
-    status,
-    result=None,
-    error=None
-):
+def update_metadata(file_id, status, result=None, error=None):
     if status == "completed":
         result = convert_floats(result)
 
         table.update_item(
-            Key={
-                "file_id": file_id
-            },
-
+            Key={"file_id": file_id},
             UpdateExpression="""
                 SET #status = :status,
                     tags = :tags,
                     tag_names = :tag_names,
                     detections = :detections
             """,
-
             ExpressionAttributeNames={
                 "#status": "status"
             },
-
             ExpressionAttributeValues={
                 ":status": "completed",
-
-                ":tags": result.get(
-                    "tags",
-                    []
-                ),
-
-                ":tag_names": result.get(
-                    "tag_names",
-                    []
-                ),
-
-                ":detections": result.get(
-                    "detections",
-                    []
-                )
+                ":tags": result.get("tags", []),
+                ":tag_names": result.get("tag_names", []),
+                ":detections": result.get("detections", [])
             }
         )
 
     else:
         table.update_item(
-            Key={
-                "file_id": file_id
-            },
-
+            Key={"file_id": file_id},
             UpdateExpression="""
                 SET #status = :status,
                     processing_error = :error
             """,
-
             ExpressionAttributeNames={
                 "#status": "status"
             },
-
             ExpressionAttributeValues={
                 ":status": "failed",
-
-                ":error": (
-                    error
-                    or "Unknown ML processing error"
-                )
+                ":error": error or "Unknown ML processing error"
             }
         )
 
 
+def save_frame_result(file_id, key, result):
+    frame_id = f"{file_id}#{os.path.basename(key)}"
+
+    frame_results_table.put_item(
+        Item={
+            "frame_id": frame_id,
+            "video_id": file_id,
+            "frame_key": key,
+            "result": convert_floats(result)
+        }
+    )
+
+
+def invoke_aggregator(file_id):
+    lambda_client.invoke(
+        FunctionName=AGGREGATOR_LAMBDA_NAME,
+        InvocationType="Event",
+        Payload=json.dumps({
+            "file_id": file_id
+        })
+    )
+
+
 def lambda_handler(event, context):
-    if (
-        "body" in event
-        and isinstance(event["body"], str)
-    ):
+    if "body" in event and isinstance(event["body"], str):
         event = json.loads(event["body"])
 
     bucket = event["bucket"]
-
     key = event["key"]
-
     file_id = event.get("file_id")
+    file_type = event.get("file_type", "image")
 
     if not file_id:
-        raise ValueError(
-            "file_id is required"
-        )
+        raise ValueError("file_id is required")
+
+    print(f"Processing file_id={file_id}, file_type={file_type}, key={key}")
 
     suffix = "." + key.split(".")[-1]
-
-    image_path = None
+    local_file_path = None
 
     try:
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=suffix
-        ) as tmp:
-
-            s3.download_fileobj(
-                bucket,
-                key,
-                tmp
-            )
-
-            image_path = tmp.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            s3.download_fileobj(bucket, key, tmp)
+            local_file_path = tmp.name
 
         service = get_model_service()
 
-        result = service.process_image(
-            image_path
-        )
+        if file_type in ["image", "frame"]:
+            result = service.process_image(local_file_path)
+        else:
+            raise ValueError(f"Unsupported file_type: {file_type}")
 
-        update_metadata(
-            file_id=file_id,
-            status="completed",
-            result=result
-        )
+        if file_type == "image":
+            update_metadata(file_id=file_id, status="completed", result=result)
 
-        print(
-            "ML processing completed "
-            "and metadata updated"
-        )
+        elif file_type == "frame":
+            save_frame_result(file_id=file_id, key=key, result=result)
+            invoke_aggregator(file_id=file_id)
+
+        print("ML processing completed")
 
         return {
             "statusCode": 200,
-
-            "body": json.dumps(
-                convert_decimals(result)
-            )
+            "body": json.dumps(convert_decimals(result))
         }
 
     except Exception as e:
-        print(
-            f"ML processing failed: {e}"
-        )
+        print(f"ML processing failed: {e}")
 
-        update_metadata(
-            file_id=file_id,
-            status="failed",
-            error=str(e)
-        )
+        update_metadata(file_id=file_id, status="failed", error=str(e))
 
         raise
 
     finally:
-        if (
-            image_path
-            and os.path.exists(image_path)
-        ):
-            os.remove(image_path)
+        if local_file_path and os.path.exists(local_file_path):
+            os.remove(local_file_path)

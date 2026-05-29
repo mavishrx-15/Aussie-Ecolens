@@ -9,6 +9,8 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 from megadetector.detection import run_detector_batch
+import cv2
+import tempfile
 
 from dotenv import load_dotenv
 from classes import CLASSES
