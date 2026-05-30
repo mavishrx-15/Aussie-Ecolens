@@ -127,11 +127,12 @@ def lambda_handler(event, context):
     key = event["key"]
     file_id = event.get("file_id")
     file_type = event.get("file_type", "image")
+    temporary_query = event.get("temporary_query", False)
 
-    if not file_id:
+    if not file_id and not temporary_query:
         raise ValueError("file_id is required")
 
-    print(f"Processing file_id={file_id}, file_type={file_type}, key={key}")
+    print(f"Processing file_id={file_id}, file_type={file_type}, key={key}, temporary_query={temporary_query}")
 
     suffix = "." + key.split(".")[-1]
     local_file_path = None
@@ -147,6 +148,16 @@ def lambda_handler(event, context):
             result = service.process_image(local_file_path)
         else:
             raise ValueError(f"Unsupported file_type: {file_type}")
+
+        if temporary_query:
+            print("Temporary query mode: returning ML result without saving metadata")
+            return {
+                "statusCode": 200,
+                "body": json.dumps({
+                    "tag_names": result.get("tag_names", []),
+                    "tags": result.get("tags", [])
+                })
+            }
 
         if file_type == "image":
             update_metadata(file_id=file_id, status="completed", result=result)
@@ -165,7 +176,8 @@ def lambda_handler(event, context):
     except Exception as e:
         print(f"ML processing failed: {e}")
 
-        update_metadata(file_id=file_id, status="failed", error=str(e))
+        if not temporary_query and file_id:
+            update_metadata(file_id=file_id, status="failed", error=str(e))
 
         raise
 
