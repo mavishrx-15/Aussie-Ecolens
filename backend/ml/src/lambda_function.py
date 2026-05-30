@@ -9,11 +9,12 @@ from model_service import WildlifeModelService
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 lambda_client = boto3.client("lambda")
-
+sns = boto3.client("sns")
 table = dynamodb.Table("media_files")
 frame_results_table = dynamodb.Table("frame_results")
 
-AGGREGATOR_LAMBDA_NAME = "video-result-aggregator"
+AGGREGATOR_LAMBDA_NAME = os.environ["AGGREGATOR_FUNCTION"]
+TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
 
 model_service = None
 
@@ -118,6 +119,25 @@ def invoke_aggregator(file_id):
         })
     )
 
+def publish_notification(file_id, tags):
+    if not tags:
+        return
+
+    sns.publish(
+        TopicArn=TOPIC_ARN,
+        Subject="New Wildlife Image Observation",
+        Message=(
+            f"New wildlife image processed.\n\n"
+            f"File ID: {file_id}\n"
+            f"Detected species: {', '.join(tags)}"
+        ),
+        MessageAttributes={
+            "species": {
+                "DataType": "String.Array",
+                "StringValue": json.dumps(tags)
+            }
+        }
+    )
 
 def lambda_handler(event, context):
     if "body" in event and isinstance(event["body"], str):
@@ -161,6 +181,7 @@ def lambda_handler(event, context):
 
         if file_type == "image":
             update_metadata(file_id=file_id, status="completed", result=result)
+            publish_notification(file_id=file_id, tags=result.get("tag_names", []))
 
         elif file_type == "frame":
             save_frame_result(file_id=file_id, key=key, result=result)
