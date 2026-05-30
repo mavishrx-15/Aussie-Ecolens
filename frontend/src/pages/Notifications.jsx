@@ -6,7 +6,13 @@ import { API_BASE_URL } from '../config'
 
 const { Title, Text } = Typography
 
-const COMMON_SPECIES = ['koala', 'wombat', 'kangaroo', 'dingo', 'echidna', 'platypus', 'magpie', 'kookaburra']
+const COMMON_SPECIES = [
+  'cattle', 'dingo', 'australian magpie', 'laughing kookaburra',
+  'common wombat', 'eastern gray kangaroo', 'australian echidna',
+  'swamp wallaby', 'common brushtail', 'australian brushturkey',
+  'southern cassowary', 'wild boar', 'red fox', 'domestic cat',
+  'human'
+]
 
 export default function Notifications() {
   const [email, setEmail] = useState('')

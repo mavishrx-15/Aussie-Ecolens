@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Input, Button, Typography, Tag, Space, Divider, message, Card, Upload } from 'antd'
+import { Input, Button, Typography, Tag, Space, Divider, message, Card, Upload, Row, Col } from 'antd'
 import { PlusOutlined, DeleteOutlined, TagOutlined, InboxOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import { QUERY_API_BASE_URL } from '../config'
@@ -83,22 +83,39 @@ export default function Manage() {
     setFileLoading(true)
     try {
       const token = await getToken()
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await axios.post(`${QUERY_API_BASE_URL}/query/file-tags`,
-        { detected_tags: [file.name.split('.')[0]] },
-        { headers: { Authorization: token } }
-      )
+
+      // Step 1: Get temp upload URL
+      const urlRes = await axios.post(`${QUERY_API_BASE_URL}/query/upload-url`, {
+        fileName: file.name
+      }, {
+        headers: { Authorization: token }
+      })
+
+      const { uploadUrl, bucket, key, contentType } = urlRes.data
+
+      // Step 2: Upload file to temp S3 location
+      await axios.put(uploadUrl, file, {
+        headers: { 'Content-Type': contentType }
+      })
+
+      // Step 3: Query by file tags
+      const res = await axios.post(`${QUERY_API_BASE_URL}/query/file-tags`, {
+        bucket,
+        key
+      }, {
+        headers: { Authorization: token }
+      })
+
       setFileResults(res.data.results || [])
       if (res.data.results?.length === 0) message.info('No matching files found')
     } catch (err) {
+      console.error('Error details:', err.response?.data)
       message.error('Query failed')
     } finally {
       setFileLoading(false)
     }
     return false
   }
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -193,11 +210,31 @@ export default function Manage() {
           {fileResults.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <Title level={5}>Matching Files</Title>
-              {fileResults.map((file, i) => (
-                <div key={i} style={{ marginBottom: 8 }}>
-                  <a href={file.original_url} target="_blank" rel="noreferrer">{file.original_url}</a>
-                </div>
-              ))}
+              <Row gutter={[16, 16]}>
+                {fileResults.map((file, i) => (
+                  <Col key={i} xs={12} sm={8} md={6}>
+                    <Card
+                      hoverable
+                      cover={
+                        <img
+                          src={file.preview_url || file.thumbnail_url}
+                          alt="result"
+                          style={{ height: 150, objectFit: 'cover', cursor: 'pointer' }}
+                          onClick={() => window.open(file.full_url)}
+                        />
+                      }
+                      bodyStyle={{ padding: 8 }}
+                    >
+                      <div style={{ marginBottom: 4 }}>
+                        {file.tag_names?.map(tag => (
+                          <Tag key={tag} color="green" style={{ marginBottom: 2, fontSize: 11 }}>{tag}</Tag>
+                        ))}
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Click image to view full</Text>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
             </div>
           )}
         </Card>
