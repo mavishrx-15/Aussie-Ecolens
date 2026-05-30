@@ -9,6 +9,7 @@ export default function Navbar() {
   const location = useLocation()
 
   const items = [
+    { key: '/dashboard', label: 'Dashboard' },
     { key: '/upload', label: 'Upload' },
     { key: '/query', label: 'Search' },
     { key: '/manage', label: 'Manage' },
