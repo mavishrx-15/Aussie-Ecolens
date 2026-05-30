@@ -18,7 +18,7 @@ export default function Login() {
     try {
       await signIn(values.email, values.password)
       message.success('Logged in successfully!')
-      navigate('/upload')
+      navigate('/dashboard')
     } catch (err) {
       if (err.code === 'UserNotConfirmedException') {
         setConfirmEmail(values.email)

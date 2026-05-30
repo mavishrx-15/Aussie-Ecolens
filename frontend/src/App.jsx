@@ -6,6 +6,9 @@ import Upload from './pages/Upload'
 import Query from './pages/Query'
 import Manage from './pages/Manage'
 import Notifications from './pages/Notifications'
+import Dashboard from './pages/Dashboard'
+
+
 
 function Layout({ children }) {
   const location = useLocation()
@@ -25,6 +28,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/query" element={<Query />} />
           <Route path="/manage" element={<Manage />} />

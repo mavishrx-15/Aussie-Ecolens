@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Input, Button, Card, Typography, Tag, Row, Col, Empty, Spin, Tabs, message } from 'antd'
+import { Input, Button, Card, Typography, Tag, Row, Col, Empty, Spin, Tabs, Space, message } from 'antd'
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import { QUERY_API_BASE_URL } from '../config'
@@ -7,16 +7,34 @@ import { getToken } from '../auth'
 
 const { Title, Text } = Typography
 
+const COMMON_SPECIES = [
+  'cattle', 'dingo', 'australian magpie', 'laughing kookaburra',
+  'common wombat', 'eastern gray kangaroo', 'australian echidna',
+  'swamp wallaby', 'common brushtail', 'australian brushturkey',
+  'southern cassowary', 'wild boar', 'red fox', 'domestic cat',
+  'human'
+]
+
 export default function Query() {
+  // Tag search state
   const [tags, setTags] = useState([])
   const [tagInput, setTagInput] = useState('')
   const [countInput, setCountInput] = useState(1)
+
+  // Species search state
   const [species, setSpecies] = useState([])
   const [speciesInput, setSpeciesInput] = useState('')
+
+  // Thumbnail search state
   const [thumbnailUrl, setThumbnailUrl] = useState('')
-  const [results, setResults] = useState([])
   const [fullImageUrl, setFullImageUrl] = useState('')
+
+  // Shared state
+  const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
+
+  // Controls Empty display — only for tag/species searches
+  const [hasSearched, setHasSearched] = useState(false)
 
   const addTag = () => {
     if (!tagInput.trim()) return
@@ -25,19 +43,42 @@ export default function Query() {
     setCountInput(1)
   }
 
-  const removeTag = (index) => setTags(tags.filter((_, i) => i !== index))
-
-  const addSpecies = () => {
-    if (!speciesInput.trim()) return
-    setSpecies([...species, speciesInput.toLowerCase()])
-    setSpeciesInput('')
+  const removeTag = (index) => {
+    setTags(tags.filter((_, i) => i !== index))
+    setResults([])
+    setHasSearched(false)
   }
 
-  const removeSpecies = (index) => setSpecies(species.filter((_, i) => i !== index))
+  const addSpecies = (name) => {
+    const val = (name || speciesInput).toLowerCase().trim()
+    if (!val || species.includes(val)) return
+    setSpecies([...species, val])
+    if (!name) setSpeciesInput('')
+  }
+
+  const removeSpecies = (index) => {
+    setSpecies(species.filter((_, i) => i !== index))
+    setResults([])
+    setHasSearched(false)
+  }
+
+  // Reset all state on tab switch
+  const handleTabChange = () => {
+    setTags([])
+    setTagInput('')
+    setCountInput(1)
+    setSpecies([])
+    setSpeciesInput('')
+    setThumbnailUrl('')
+    setResults([])
+    setFullImageUrl('')
+    setHasSearched(false)
+  }
 
   const handleTagSearch = async () => {
-    if (tags.length === 0) return
+    if (tags.length === 0) { message.warning('Please add at least one tag'); return }
     setLoading(true)
+    setHasSearched(true)
     try {
       const token = await getToken()
       const query = {}
@@ -55,8 +96,9 @@ export default function Query() {
   }
 
   const handleSpeciesSearch = async () => {
-    if (species.length === 0) return
+    if (species.length === 0) { message.warning('Please add at least one species'); return }
     setLoading(true)
+    setHasSearched(true)
     try {
       const token = await getToken()
       const res = await axios.post(`${QUERY_API_BASE_URL}/query/species`, { species }, {
@@ -72,14 +114,16 @@ export default function Query() {
   }
 
   const handleThumbnailSearch = async () => {
-    if (!thumbnailUrl.trim()) return
+    if (!thumbnailUrl.trim()) { message.warning('Please enter a thumbnail URL'); return }
     setLoading(true)
+    setFullImageUrl('')
     try {
       const token = await getToken()
       const res = await axios.post(`${QUERY_API_BASE_URL}/query/thumbnail`, { thumbnail_url: thumbnailUrl }, {
         headers: { Authorization: token }
       })
       setFullImageUrl(res.data.full_url || res.data.original_url || '')
+      if (!res.data.full_url && !res.data.original_url) message.info('No original image found')
     } catch (err) {
       message.error('Query failed')
     } finally {
@@ -87,21 +131,13 @@ export default function Query() {
     }
   }
 
-  const cardStyle = {
-    background: 'white',
-    borderRadius: 16,
-    padding: 32,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-    marginBottom: 24
-  }
-
   const items = [
     {
       key: '1',
       label: 'Search by Tags',
       children: (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space.Compact style={{ width: '100%' }}>
             <Input
               placeholder="Species (e.g. koala)"
               value={tagInput}
@@ -123,93 +159,112 @@ export default function Query() {
               icon={<PlusOutlined />}
               onClick={addTag}
               size="large"
-              style={{ background: '#2e7d32', borderColor: '#2e7d32', color: 'white' }}
+              type="primary"
+              style={{ background: '#2e7d32', borderColor: '#2e7d32' }}
             >
               Add
             </Button>
-          </div>
-          <div style={{ marginBottom: 16 }}>
+          </Space.Compact>
+          <Space size={[8, 4]} wrap>
             {tags.map((tag, i) => (
-              <Tag key={i} closable onClose={() => removeTag(i)} color="green" style={{ fontSize: 14, padding: '4px 10px', marginBottom: 4 }}>
+              <Tag key={i} closable onClose={() => removeTag(i)} color="green" style={{ fontSize: 14, padding: '4px 10px' }}>
                 {tag.name} ≥ {tag.count}
               </Tag>
             ))}
-          </div>
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleTagSearch} size="large" block disabled={tags.length === 0} style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          </Space>
+          <Button type="primary" icon={<SearchOutlined />} onClick={handleTagSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
             Search
           </Button>
-        </div>
+        </Space>
       )
     },
     {
       key: '2',
       label: 'Search by Species',
       children: (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space.Compact style={{ width: '100%' }}>
             <Input
               placeholder="Species (e.g. dingo)"
               value={speciesInput}
               onChange={(e) => setSpeciesInput(e.target.value)}
-              onPressEnter={addSpecies}
+              onPressEnter={() => addSpecies()}
               size="large"
-              style={{ flex: 1 }}
             />
-            <Button icon={<PlusOutlined />} onClick={addSpecies} size="large" style={{ background: '#2e7d32', borderColor: '#2e7d32', color: 'white' }}>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => addSpecies()}
+              size="large"
+              type="primary"
+              style={{ background: '#2e7d32', borderColor: '#2e7d32' }}
+            >
               Add
             </Button>
+          </Space.Compact>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>Quick select:</Text>
+            <Space size={[6, 6]} wrap style={{ marginTop: 6 }}>
+              {COMMON_SPECIES.map(s => (
+                <Tag.CheckableTag
+                  key={s}
+                  checked={species.includes(s)}
+                  onChange={(checked) => checked ? addSpecies(s) : removeSpecies(species.indexOf(s))}
+                  style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20 }}
+                >
+                  {s}
+                </Tag.CheckableTag>
+              ))}
+            </Space>
           </div>
-          <div style={{ marginBottom: 16 }}>
+          <Space size={[8, 4]} wrap>
             {species.map((s, i) => (
-              <Tag key={i} closable onClose={() => removeSpecies(i)} color="green" style={{ fontSize: 14, padding: '4px 10px', marginBottom: 4 }}>
+              <Tag key={i} closable onClose={() => removeSpecies(i)} color="green" style={{ fontSize: 14, padding: '4px 10px' }}>
                 {s}
               </Tag>
             ))}
-          </div>
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleSpeciesSearch} size="large" block disabled={species.length === 0} style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          </Space>
+          <Button type="primary" icon={<SearchOutlined />} onClick={handleSpeciesSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
             Search
           </Button>
-        </div>
+        </Space>
       )
     },
     {
       key: '3',
       label: 'Search by Thumbnail URL',
       children: (
-        <div>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Input
             placeholder="Paste thumbnail URL here"
             value={thumbnailUrl}
             onChange={(e) => setThumbnailUrl(e.target.value)}
             size="large"
-            style={{ marginBottom: 16 }}
           />
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleThumbnailSearch} size="large" block disabled={!thumbnailUrl} style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          <Button type="primary" icon={<SearchOutlined />} onClick={handleThumbnailSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
             Find Original
           </Button>
-            {fullImageUrl && (
-              <div style={{ marginTop: 16 }}>
-                <Text strong style={{ display: 'block', marginBottom: 8 }}>Original image found:</Text>
-                <img
-                  src={fullImageUrl}
-                  alt="original"
-                  style={{ width: '100%', borderRadius: 8, cursor: 'pointer' }}
-                  onClick={() => window.open(fullImageUrl)}
-                />
-                <Button
-                  size="small"
-                  block
-                  style={{ marginTop: 8 }}
-                  onClick={() => {
-                    navigator.clipboard.writeText(fullImageUrl)
-                    message.success('URL copied!')
-                  }}
-                >
-                  Copy full image URL
-                </Button>
-              </div>
-            )}
-        </div>
+          {fullImageUrl && (
+            <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Text strong>Original image found:</Text>
+              <img
+                src={fullImageUrl}
+                alt="original"
+                style={{ width: '100%', borderRadius: 8, cursor: 'pointer' }}
+                onClick={() => window.open(fullImageUrl)}
+              />
+              <Button
+                size="small"
+                block
+                onClick={() => {
+                  navigator.clipboard.writeText(fullImageUrl)
+                  message.success('URL copied!')
+                }}
+              >
+                Copy full image URL
+              </Button>
+            </Space>
+          )}
+        </Space>
       )
     }
   ]
@@ -217,17 +272,22 @@ export default function Query() {
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e6f4ea 0%, #c8e6c9 100%)', padding: '40px 24px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Title level={2} style={{ color: '#2e7d32' }}>Search Wildlife</Title>
+        <Space direction="vertical" align="center" style={{ width: '100%', marginBottom: 32 }}>
+          <Title level={2} style={{ color: '#2e7d32', marginBottom: 0 }}>Search Wildlife</Title>
           <Text type="secondary">Search files by species, tags, or thumbnail URL</Text>
-        </div>
+        </Space>
 
-        <div style={cardStyle}>
-          <Tabs items={items} />
-        </div>
+        <Card style={{ borderRadius: 16, marginBottom: 24 }} styles={{ body: { padding: 32 } }}>
+          <Tabs items={items} onChange={handleTabChange} />
+        </Card>
 
-        {loading && <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>}
+        {loading && (
+          <Space style={{ width: '100%', justifyContent: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+          </Space>
+        )}
 
+        {/* Tag/species search results grid */}
         {!loading && results.length > 0 && (
           <Row gutter={[16, 16]}>
             {results.map((file, i) => (
@@ -242,13 +302,13 @@ export default function Query() {
                       onClick={() => window.open(file.full_url)}
                     />
                   }
-                  bodyStyle={{ padding: 8 }}
+                  styles={{ body: { padding: 8 } }}
                 >
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  <Space size={[4, 4]} wrap style={{ marginBottom: 4 }}>
                     {file.tag_names?.map(tag => (
-                      <Tag key={tag} color="green" style={{ marginBottom: 4 }}>{tag}</Tag>
+                      <Tag key={tag} color="green" style={{ fontSize: 12 }}>{tag}</Tag>
                     ))}
-                  </div>
+                  </Space>
                   <Button
                     size="small"
                     block
@@ -266,7 +326,8 @@ export default function Query() {
           </Row>
         )}
 
-        {!loading && results.length === 0 && (tags.length > 0 || species.length > 0) && (
+        {/* Only show after tag/species search, not thumbnail */}
+        {!loading && hasSearched && results.length === 0 && (
           <Empty description="No results found" />
         )}
       </div>
