@@ -79,7 +79,7 @@ export default function Query() {
       const res = await axios.post(`${QUERY_API_BASE_URL}/query/thumbnail`, { thumbnail_url: thumbnailUrl }, {
         headers: { Authorization: token }
       })
-      setFullImageUrl(res.data.original_url || '')
+      setFullImageUrl(res.data.full_url || res.data.original_url || '')
     } catch (err) {
       message.error('Query failed')
     } finally {
@@ -187,12 +187,28 @@ export default function Query() {
           <Button type="primary" icon={<SearchOutlined />} onClick={handleThumbnailSearch} size="large" block disabled={!thumbnailUrl} style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
             Find Original
           </Button>
-          {fullImageUrl && (
-            <div style={{ marginTop: 16 }}>
-              <Text strong>Original image URL: </Text>
-              <a href={fullImageUrl} target="_blank" rel="noreferrer">{fullImageUrl}</a>
-            </div>
-          )}
+            {fullImageUrl && (
+              <div style={{ marginTop: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 8 }}>Original image found:</Text>
+                <img
+                  src={fullImageUrl}
+                  alt="original"
+                  style={{ width: '100%', borderRadius: 8, cursor: 'pointer' }}
+                  onClick={() => window.open(fullImageUrl)}
+                />
+                <Button
+                  size="small"
+                  block
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(fullImageUrl)
+                    message.success('URL copied!')
+                  }}
+                >
+                  Copy full image URL
+                </Button>
+              </div>
+            )}
         </div>
       )
     }
@@ -220,15 +236,30 @@ export default function Query() {
                   hoverable
                   cover={
                     <img
-                      src={file.thumbnail_url}
+                      src={file.preview_url || file.thumbnail_url}
                       alt="result"
-                      style={{ height: 150, objectFit: 'cover' }}
-                      onClick={() => window.open(file.original_url)}
+                      style={{ height: 150, objectFit: 'cover', cursor: 'pointer' }}
+                      onClick={() => window.open(file.full_url)}
                     />
                   }
                   bodyStyle={{ padding: 8 }}
                 >
-                  <Text type="secondary" style={{ fontSize: 12 }}>Click to view full image</Text>
+                  <div style={{ fontSize: 12, marginBottom: 4 }}>
+                    {file.tag_names?.map(tag => (
+                      <Tag key={tag} color="green" style={{ marginBottom: 4 }}>{tag}</Tag>
+                    ))}
+                  </div>
+                  <Button
+                    size="small"
+                    block
+                    onClick={() => {
+                      navigator.clipboard.writeText(file.preview_url || file.thumbnail_url)
+                      message.success('Thumbnail URL copied!')
+                    }}
+                  >
+                    Copy thumbnail URL
+                  </Button>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Click image to view full</Text>
                 </Card>
               </Col>
             ))}

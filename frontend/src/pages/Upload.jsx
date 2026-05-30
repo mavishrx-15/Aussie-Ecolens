@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Upload, Button, Typography, message, Progress } from 'antd'
+import { Upload, Typography, message, Progress } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import { API_BASE_URL } from '../config'
+import { getToken } from '../auth'
 
 const { Title, Text } = Typography
 const { Dragger } = Upload
@@ -15,15 +16,26 @@ export default function UploadPage() {
     setUploading(true)
     setProgress(0)
     try {
-      // Step 1: Get presigned URL
+      // Step 1: Get presigned URL with token
+      const token = await getToken()
       const res = await axios.post(`${API_BASE_URL}/upload-url`, {
-        filename: file.name
+        fileName: file.name
+      }, {
+        headers: { Authorization: token }
       })
-      const { uploadUrl } = res.data
+
+      const { uploadUrl, contentType } = res.data
 
       // Step 2: Upload to S3
       await axios.put(uploadUrl, file, {
-        headers: { 'Content-Type': file.type },
+        headers: {
+          'Content-Type': contentType,
+          'x-amz-meta-file_id': res.data.fileId,
+          'x-amz-meta-file_type': res.data.fileType,
+          'x-amz-meta-original_file_name': res.data.fileName,
+          'x-amz-meta-user_email': res.data.userEmail,
+          'x-amz-meta-user_id': res.data.userId
+        },
         onUploadProgress: (e) => {
           setProgress(Math.round((e.loaded / e.total) * 100))
         }
@@ -31,9 +43,11 @@ export default function UploadPage() {
 
       message.success(`${file.name} uploaded successfully!`)
     } catch (err) {
+      console.error(err)
       message.error('Upload failed, please try again.')
     } finally {
       setUploading(false)
+      setProgress(0)
     }
     return false
   }
@@ -45,7 +59,6 @@ export default function UploadPage() {
       padding: '40px 24px'
     }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
-
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Title level={2} style={{ color: '#2e7d32' }}>Upload Media</Title>
           <Text type="secondary">Upload images or videos for wildlife detection</Text>
@@ -59,7 +72,7 @@ export default function UploadPage() {
         }}>
           <Dragger
             beforeUpload={handleUpload}
-            accept="image/*,video/*"
+            accept=".jpg,.jpeg,.png,.mp4,.mov,.avi"
             showUploadList={false}
             disabled={uploading}
           >
@@ -68,7 +81,7 @@ export default function UploadPage() {
             </p>
             <p className="ant-upload-text">Click or drag file to upload</p>
             <p className="ant-upload-hint">
-              Supports JPG, PNG, MP4. Wildlife species will be auto-detected.
+              Supports JPG, PNG, MP4, MOV, AVI. Wildlife species will be auto-detected.
             </p>
           </Dragger>
 
