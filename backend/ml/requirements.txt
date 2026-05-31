@@ -1,6 +1,5 @@
 numpy
 pillow
-matplotlib
 pyyaml
 tqdm
 megadetector
