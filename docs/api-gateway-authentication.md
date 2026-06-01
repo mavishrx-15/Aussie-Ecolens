@@ -97,3 +97,6 @@ Completed:
 - Lambda integration
 - S3 upload bucket creation
 - Serverless upload workflow
+
+## First report link
+https://docs.google.com/document/d/18Y9trdtDLhR-g8_aipILiElvTLqs09nEWCqudjRCCLE/edit?usp=sharing
