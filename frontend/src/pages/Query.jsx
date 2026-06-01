@@ -1,143 +1,186 @@
-import { useState } from 'react'
-import { Input, Button, Card, Typography, Tag, Row, Col, Empty, Spin, Tabs, Space, message } from 'antd'
-import { SearchOutlined, PlusOutlined } from '@ant-design/icons'
-import axios from 'axios'
-import { QUERY_API_BASE_URL } from '../config'
-import { getToken } from '../auth'
+import { useState } from "react";
+import {
+  Input,
+  Button,
+  Card,
+  Typography,
+  Tag,
+  Row,
+  Col,
+  Empty,
+  Spin,
+  Tabs,
+  Space,
+  message,
+} from "antd";
+import { SearchOutlined, PlusOutlined } from "@ant-design/icons";
+import axios from "axios";
+import { QUERY_API_BASE_URL } from "../config";
+import { getToken } from "../auth";
 
-const { Title, Text } = Typography
+const { Title, Text } = Typography;
 
 const COMMON_SPECIES = [
-  'cattle', 'dingo', 'australian magpie', 'laughing kookaburra',
-  'common wombat', 'eastern gray kangaroo', 'australian echidna',
-  'swamp wallaby', 'common brushtail', 'australian brushturkey',
-  'southern cassowary', 'wild boar', 'red fox', 'domestic cat',
-  'human'
-]
+  "cattle",
+  "dingo",
+  "australian magpie",
+  "laughing kookaburra",
+  "common wombat",
+  "eastern gray kangaroo",
+  "australian echidna",
+  "swamp wallaby",
+  "common brushtail",
+  "australian brushturkey",
+  "southern cassowary",
+  "wild boar",
+  "red fox",
+  "domestic cat",
+  "human",
+];
 
 export default function Query() {
   // Tag search state
-  const [tags, setTags] = useState([])
-  const [tagInput, setTagInput] = useState('')
-  const [countInput, setCountInput] = useState(1)
+  const [tags, setTags] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+  const [countInput, setCountInput] = useState(1);
 
   // Species search state
-  const [species, setSpecies] = useState([])
-  const [speciesInput, setSpeciesInput] = useState('')
+  const [species, setSpecies] = useState([]);
+  const [speciesInput, setSpeciesInput] = useState("");
 
   // Thumbnail search state
-  const [thumbnailUrl, setThumbnailUrl] = useState('')
-  const [fullImageUrl, setFullImageUrl] = useState('')
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [fullImageUrl, setFullImageUrl] = useState("");
 
   // Shared state
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   // Controls Empty display — only for tag/species searches
-  const [hasSearched, setHasSearched] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false);
 
   const addTag = () => {
-    if (!tagInput.trim()) return
-    setTags([...tags, { name: tagInput.toLowerCase(), count: countInput }])
-    setTagInput('')
-    setCountInput(1)
-  }
+    if (!tagInput.trim()) return;
+    setTags([...tags, { name: tagInput.toLowerCase(), count: countInput }]);
+    setTagInput("");
+    setCountInput(1);
+  };
 
   const removeTag = (index) => {
-    setTags(tags.filter((_, i) => i !== index))
-    setResults([])
-    setHasSearched(false)
-  }
+    setTags(tags.filter((_, i) => i !== index));
+    setResults([]);
+    setHasSearched(false);
+  };
 
   const addSpecies = (name) => {
-    const val = (name || speciesInput).toLowerCase().trim()
-    if (!val || species.includes(val)) return
-    setSpecies([...species, val])
-    if (!name) setSpeciesInput('')
-  }
+    const val = (name || speciesInput).toLowerCase().trim();
+    if (!val || species.includes(val)) return;
+    setSpecies([...species, val]);
+    if (!name) setSpeciesInput("");
+  };
 
   const removeSpecies = (index) => {
-    setSpecies(species.filter((_, i) => i !== index))
-    setResults([])
-    setHasSearched(false)
-  }
+    setSpecies(species.filter((_, i) => i !== index));
+    setResults([]);
+    setHasSearched(false);
+  };
 
   // Reset all state on tab switch
   const handleTabChange = () => {
-    setTags([])
-    setTagInput('')
-    setCountInput(1)
-    setSpecies([])
-    setSpeciesInput('')
-    setThumbnailUrl('')
-    setResults([])
-    setFullImageUrl('')
-    setHasSearched(false)
-  }
+    setTags([]);
+    setTagInput("");
+    setCountInput(1);
+    setSpecies([]);
+    setSpeciesInput("");
+    setThumbnailUrl("");
+    setResults([]);
+    setFullImageUrl("");
+    setHasSearched(false);
+  };
 
   const handleTagSearch = async () => {
-    if (tags.length === 0) { message.warning('Please add at least one tag'); return }
-    setLoading(true)
-    setHasSearched(true)
-    try {
-      const token = await getToken()
-      const query = {}
-      tags.forEach(t => query[t.name] = t.count)
-      const res = await axios.post(`${QUERY_API_BASE_URL}/query/tags`, query, {
-        headers: { Authorization: token }
-      })
-      setResults(res.data.results || [])
-      if (res.data.results?.length === 0) message.info('No results found')
-    } catch (err) {
-      message.error('Query failed')
-    } finally {
-      setLoading(false)
+    if (tags.length === 0) {
+      message.warning("Please add at least one tag");
+      return;
     }
-  }
+    setLoading(true);
+    setHasSearched(true);
+    try {
+      const token = await getToken();
+      const query = {};
+      tags.forEach((t) => (query[t.name] = t.count));
+      const res = await axios.post(`${QUERY_API_BASE_URL}/query/tags`, query, {
+        headers: { Authorization: token },
+      });
+      setResults(res.data.results || []);
+      if (res.data.results?.length === 0) message.info("No results found");
+    } catch (err) {
+      message.error("Query failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSpeciesSearch = async () => {
-    if (species.length === 0) { message.warning('Please add at least one species'); return }
-    setLoading(true)
-    setHasSearched(true)
-    try {
-      const token = await getToken()
-      const res = await axios.post(`${QUERY_API_BASE_URL}/query/species`, { species }, {
-        headers: { Authorization: token }
-      })
-      setResults(res.data.results || [])
-      if (res.data.results?.length === 0) message.info('No results found')
-    } catch (err) {
-      message.error('Query failed')
-    } finally {
-      setLoading(false)
+    if (species.length === 0) {
+      message.warning("Please add at least one species");
+      return;
     }
-  }
+    setLoading(true);
+    setHasSearched(true);
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${QUERY_API_BASE_URL}/query/species`,
+        { species },
+        {
+          headers: { Authorization: token },
+        },
+      );
+      setResults(res.data.results || []);
+      if (res.data.results?.length === 0) message.info("No results found");
+    } catch (err) {
+      message.error("Query failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [thumbnailResult, setThumbnailResult] = useState(null);
 
   const handleThumbnailSearch = async () => {
-    if (!thumbnailUrl.trim()) { message.warning('Please enter a thumbnail URL'); return }
-    setLoading(true)
-    setFullImageUrl('')
-    try {
-      const token = await getToken()
-      const res = await axios.post(`${QUERY_API_BASE_URL}/query/thumbnail`, { thumbnail_url: thumbnailUrl }, {
-        headers: { Authorization: token }
-      })
-      setFullImageUrl(res.data.full_url || res.data.original_url || '')
-      if (!res.data.full_url && !res.data.original_url) message.info('No original image found')
-    } catch (err) {
-      message.error('Query failed')
-    } finally {
-      setLoading(false)
+    if (!thumbnailUrl.trim()) {
+      message.warning("Please enter a thumbnail URL");
+      return;
     }
-  }
+    setLoading(true);
+    setFullImageUrl("");
+    setThumbnailResult(null);
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${QUERY_API_BASE_URL}/query/thumbnail`,
+        { thumbnail_url: thumbnailUrl },
+        { headers: { Authorization: token } },
+      );
+      setFullImageUrl(res.data.full_url || res.data.original_url || "");
+      setThumbnailResult(res.data);
+      if (!res.data.full_url && !res.data.original_url)
+        message.info("No original image found");
+    } catch (err) {
+      message.error("Query failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const items = [
     {
-      key: '1',
-      label: 'Search by Tags',
+      key: "1",
+      label: "Search by Tags",
       children: (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space.Compact style={{ width: '100%' }}>
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Space.Compact style={{ width: "100%" }}>
             <Input
               placeholder="Species (e.g. koala)"
               value={tagInput}
@@ -160,30 +203,43 @@ export default function Query() {
               onClick={addTag}
               size="large"
               type="primary"
-              style={{ background: '#2e7d32', borderColor: '#2e7d32' }}
+              style={{ background: "#2e7d32", borderColor: "#2e7d32" }}
             >
               Add
             </Button>
           </Space.Compact>
           <Space size={[8, 4]} wrap>
             {tags.map((tag, i) => (
-              <Tag key={i} closable onClose={() => removeTag(i)} color="green" style={{ fontSize: 14, padding: '4px 10px' }}>
+              <Tag
+                key={i}
+                closable
+                onClose={() => removeTag(i)}
+                color="green"
+                style={{ fontSize: 14, padding: "4px 10px" }}
+              >
                 {tag.name} ≥ {tag.count}
               </Tag>
             ))}
           </Space>
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleTagSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          <Button
+            type="primary"
+            icon={<SearchOutlined />}
+            onClick={handleTagSearch}
+            size="large"
+            block
+            style={{ background: "#2e7d32", borderColor: "#2e7d32" }}
+          >
             Search
           </Button>
         </Space>
-      )
+      ),
     },
     {
-      key: '2',
-      label: 'Search by Species',
+      key: "2",
+      label: "Search by Species",
       children: (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space.Compact style={{ width: '100%' }}>
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Space.Compact style={{ width: "100%" }}>
             <Input
               placeholder="Species (e.g. dingo)"
               value={speciesInput}
@@ -196,20 +252,28 @@ export default function Query() {
               onClick={() => addSpecies()}
               size="large"
               type="primary"
-              style={{ background: '#2e7d32', borderColor: '#2e7d32' }}
+              style={{ background: "#2e7d32", borderColor: "#2e7d32" }}
             >
               Add
             </Button>
           </Space.Compact>
           <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>Quick select:</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Quick select:
+            </Text>
             <Space size={[6, 6]} wrap style={{ marginTop: 6 }}>
-              {COMMON_SPECIES.map(s => (
+              {COMMON_SPECIES.map((s) => (
                 <Tag.CheckableTag
                   key={s}
                   checked={species.includes(s)}
-                  onChange={(checked) => checked ? addSpecies(s) : removeSpecies(species.indexOf(s))}
-                  style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20 }}
+                  onChange={(checked) =>
+                    checked ? addSpecies(s) : removeSpecies(species.indexOf(s))
+                  }
+                  style={{
+                    fontSize: 12,
+                    padding: "3px 10px",
+                    borderRadius: 20,
+                  }}
                 >
                   {s}
                 </Tag.CheckableTag>
@@ -218,71 +282,138 @@ export default function Query() {
           </div>
           <Space size={[8, 4]} wrap>
             {species.map((s, i) => (
-              <Tag key={i} closable onClose={() => removeSpecies(i)} color="green" style={{ fontSize: 14, padding: '4px 10px' }}>
+              <Tag
+                key={i}
+                closable
+                onClose={() => removeSpecies(i)}
+                color="green"
+                style={{ fontSize: 14, padding: "4px 10px" }}
+              >
                 {s}
               </Tag>
             ))}
           </Space>
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleSpeciesSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          <Button
+            type="primary"
+            icon={<SearchOutlined />}
+            onClick={handleSpeciesSearch}
+            size="large"
+            block
+            style={{ background: "#2e7d32", borderColor: "#2e7d32" }}
+          >
             Search
           </Button>
         </Space>
-      )
+      ),
     },
     {
-      key: '3',
-      label: 'Search by Thumbnail URL',
+      key: "3",
+      label: "Search by Thumbnail URL",
       children: (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
           <Input
             placeholder="Paste thumbnail URL here"
             value={thumbnailUrl}
             onChange={(e) => setThumbnailUrl(e.target.value)}
             size="large"
           />
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleThumbnailSearch} size="large" block style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>
+          <Button
+            type="primary"
+            icon={<SearchOutlined />}
+            onClick={handleThumbnailSearch}
+            size="large"
+            block
+            style={{ background: "#2e7d32", borderColor: "#2e7d32" }}
+          >
             Find Original
           </Button>
-          {fullImageUrl && (
-            <Space direction="vertical" style={{ width: '100%' }} size="small">
-              <Text strong>Original image found:</Text>
-              <img
-                src={fullImageUrl}
-                alt="original"
-                style={{ width: '100%', borderRadius: 8, cursor: 'pointer' }}
-                onClick={() => window.open(fullImageUrl)}
-              />
+          {thumbnailResult && (
+            <Space direction="vertical" style={{ width: "100%" }} size="small">
+              <Text strong>Original file found:</Text>
+              <div
+                style={{ position: "relative", cursor: "pointer" }}
+                onClick={() => window.open(thumbnailResult.full_url)}
+              >
+                <img
+                  src={thumbnailResult.thumbnail_url}
+                  alt="thumbnail"
+                  style={{ width: "100%", borderRadius: 8 }}
+                />
+                {thumbnailResult.full_url?.includes(".mp4") ||
+                thumbnailResult.full_url?.includes("/videos/") ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      background: "rgba(0,0,0,0.5)",
+                      borderRadius: "50%",
+                      width: 50,
+                      height: 50,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <span style={{ color: "white", fontSize: 20 }}>▶</span>
+                  </div>
+                ) : null}
+              </div>
               <Button
                 size="small"
                 block
                 onClick={() => {
-                  navigator.clipboard.writeText(fullImageUrl)
-                  message.success('URL copied!')
+                  navigator.clipboard.writeText(thumbnailResult.full_url);
+                  message.success("URL copied!");
                 }}
               >
-                Copy full image URL
+                Copy full URL
               </Button>
             </Space>
           )}
         </Space>
-      )
-    }
-  ]
+      ),
+    },
+  ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e6f4ea 0%, #c8e6c9 100%)', padding: '40px 24px' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <Space direction="vertical" align="center" style={{ width: '100%', marginBottom: 32 }}>
-          <Title level={2} style={{ color: '#2e7d32', marginBottom: 0 }}>Search Wildlife</Title>
-          <Text type="secondary">Search files by species, tags, or thumbnail URL</Text>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #e6f4ea 0%, #c8e6c9 100%)",
+        padding: "40px 24px",
+      }}
+    >
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <Space
+          direction="vertical"
+          align="center"
+          style={{ width: "100%", marginBottom: 32 }}
+        >
+          <Title level={2} style={{ color: "#2e7d32", marginBottom: 0 }}>
+            Search Wildlife
+          </Title>
+          <Text type="secondary">
+            Search files by species, tags, or thumbnail URL
+          </Text>
         </Space>
 
-        <Card style={{ borderRadius: 16, marginBottom: 24 }} styles={{ body: { padding: 32 } }}>
+        <Card
+          style={{ borderRadius: 16, marginBottom: 24 }}
+          styles={{ body: { padding: 32 } }}
+        >
           <Tabs items={items} onChange={handleTabChange} />
         </Card>
 
         {loading && (
-          <Space style={{ width: '100%', justifyContent: 'center', padding: '40px 0' }}>
+          <Space
+            style={{
+              width: "100%",
+              justifyContent: "center",
+              padding: "40px 0",
+            }}
+          >
             <Spin size="large" />
           </Space>
         )}
@@ -296,30 +427,40 @@ export default function Query() {
                   hoverable
                   cover={
                     <img
-                      src={file.preview_url || file.thumbnail_url}
+                      src={file.thumbnail_url || file.preview_url}
                       alt="result"
-                      style={{ height: 150, objectFit: 'cover', cursor: 'pointer' }}
+                      style={{
+                        height: 150,
+                        objectFit: "cover",
+                        cursor: "pointer",
+                      }}
                       onClick={() => window.open(file.full_url)}
                     />
                   }
                   styles={{ body: { padding: 8 } }}
                 >
                   <Space size={[4, 4]} wrap style={{ marginBottom: 4 }}>
-                    {file.tag_names?.map(tag => (
-                      <Tag key={tag} color="green" style={{ fontSize: 12 }}>{tag}</Tag>
+                    {file.tag_names?.map((tag) => (
+                      <Tag key={tag} color="green" style={{ fontSize: 12 }}>
+                        {tag}
+                      </Tag>
                     ))}
                   </Space>
                   <Button
                     size="small"
                     block
                     onClick={() => {
-                      navigator.clipboard.writeText(file.preview_url || file.thumbnail_url)
-                      message.success('Thumbnail URL copied!')
+                      navigator.clipboard.writeText(
+                        file.thumbnail_url || file.preview_url,
+                      );
+                      message.success("Thumbnail URL copied!");
                     }}
                   >
                     Copy thumbnail URL
                   </Button>
-                  <Text type="secondary" style={{ fontSize: 11 }}>Click image to view full</Text>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Click image to view full
+                  </Text>
                 </Card>
               </Col>
             ))}
@@ -332,5 +473,5 @@ export default function Query() {
         )}
       </div>
     </div>
-  )
+  );
 }
