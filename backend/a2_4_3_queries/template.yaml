@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: FIT5225 A2 section 4.3 query APIs for Aussie EcoLens
+
+Parameters:
+  MediaTableName:
+    Type: String
+    Description: DynamoDB table that stores file metadata
+  MediaBucketName:
+    Type: String
+    Description: S3 bucket that stores original files and thumbnails
+  PublicBaseUrl:
+    Type: String
+    Default: ""
+    Description: Optional public URL prefix, for example a CloudFront domain
+  TaggerFunctionName:
+    Type: String
+    Default: ""
+    Description: Optional Lambda used to detect tags for temporary query files
+  PresignUrls:
+    Type: String
+    Default: "1"
+    AllowedValues:
+      - "0"
+      - "1"
+    Description: Return S3 presigned URLs so private bucket objects can be opened
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - x86_64
+
+Resources:
+  QueryApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  QueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MediaTableName
+          MEDIA_BUCKET: !Ref MediaBucketName
+          PUBLIC_BASE_URL: !Ref PublicBaseUrl
+          TAGGER_FUNCTION_NAME: !Ref TaggerFunctionName
+          PRESIGN_URLS: !Ref PresignUrls
+          PRESIGN_SECONDS: "3600"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MediaTableName
+        - S3CrudPolicy:
+            BucketName: !Ref MediaBucketName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: "*"
+      Events:
+        QueryByTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /query/tags
+            Method: post
+        QueryBySpecies:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /query/species
+            Method: post
+        QueryByThumbnail:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /query/thumbnail
+            Method: post
+        QueryByFileTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /query/file-tags
+            Method: post
+        BulkTags:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /tags/bulk
+            Method: post
+        DeleteFiles:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /files
+            Method: delete
+        DeleteFilesPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QueryApi
+            Path: /files/delete
+            Method: post
+
+Outputs:
+  QueryApiUrl:
+    Description: Base URL of the query API
+    Value: !Sub "https://${QueryApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
