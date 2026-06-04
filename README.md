@@ -3,7 +3,7 @@
 A multi-cloud serverless wildlife observation platform built for FIT5225.
 
 ## Live Demo
-https://aussie-ecolens-sk5r2fjkn-mavishrx-15s-projects.vercel.app
+https://aussie-ecolens.vercel.app/
 
 ## Tech Stack
 
